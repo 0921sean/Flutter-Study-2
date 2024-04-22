@@ -2,6 +2,9 @@ import 'package:flutter/material.dart';
 import 'style.dart' as style;
 import 'package:http/http.dart' as http;
 import 'dart:convert';
+import 'package:image_picker/image_picker.dart';
+import 'dart:io';
+import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
   runApp(
@@ -22,6 +25,38 @@ class MyApp extends StatefulWidget {
 class _MyAppState extends State<MyApp> {
   var tab = 0;
   var data = [];
+  var userImage;
+  var userContent;
+
+  saveData() async {
+    var storage = await SharedPreferences.getInstance();
+
+    var map = {'age': 20};
+    storage.setString('map', jsonEncode(map));
+    var result = storage.getString('map') ?? '없는데요';
+    print(jsonDecode(result)['age']);
+  }
+
+  addMyData(){
+    var myData = {
+      'id': data.length,
+      'image': userImage,
+      'likes': 5,
+      'date': 'July 25',
+      'content': userContent,
+      'liked': false,
+      'user': 'John Kim'
+    };
+    setState(() {
+      data.insert(0, myData);
+    });
+  }
+
+  setUserContent(a){
+    setState(() {
+      userContent = a;
+    });
+  }
 
   addData(a){
     setState(() {
@@ -40,6 +75,7 @@ class _MyAppState extends State<MyApp> {
   @override
   void initState() {
     super.initState();
+    saveData();
     getData();
   }
 
@@ -51,7 +87,20 @@ class _MyAppState extends State<MyApp> {
         actions: [
           IconButton(
             icon: Icon(Icons.add_box_outlined),
-            onPressed: (){},
+            onPressed: () async{
+              var picker = ImagePicker();
+              var image = await picker.pickImage(source: ImageSource.gallery);
+              if (image != null){
+                setState(() {
+                  userImage = File(image.path);
+                });
+              }
+
+              Navigator.push(context,
+                MaterialPageRoute(builder: (c) => Upload(
+                    userImage : userImage,) )
+              );
+            },
             iconSize: 30,
           ),
         ]
@@ -84,11 +133,18 @@ class Home extends StatefulWidget {
 
 class _HomeState extends State<Home> {
   var scroll = ScrollController();
+  var result;
+  int cnt = 0;
 
   getMore() async {
-    var result = await http.get(Uri.parse('https://codingapple1.github.io/app/more1.json'));
+    if (cnt % 2 == 0){
+      result = await http.get(Uri.parse('https://codingapple1.github.io/app/more1.json'));
+    } else {
+      result = await http.get(Uri.parse('https://codingapple1.github.io/app/more2.json'));
+    }
     var result2 = jsonDecode(result.body);
     widget.addData(result2);
+    cnt++;
   }
 
   @override
@@ -108,7 +164,9 @@ class _HomeState extends State<Home> {
       return ListView.builder(itemCount: widget.data.length, controller: scroll, itemBuilder: (c, i){
         return Column(
           children: [
-            Image.network(widget.data[i]['image']),
+            widget.data[i]['image'].runtimeType == String
+              ? Image.network(widget.data[i]['image'])
+              : Image.file(widget.data[i]['image']),
             Container(
               constraints: BoxConstraints(maxWidth: 600),
               padding: EdgeInsets.all(20),
@@ -132,3 +190,40 @@ class _HomeState extends State<Home> {
   }
 }
 
+class Upload extends StatelessWidget {
+  const Upload({Key? key, this.userImage, this.setUserContent, this.addMyData}) : super(key: key);
+  final userImage;
+  final setUserContent;
+  final addMyData;
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+        resizeToAvoidBottomInset: false,
+        appBar: AppBar( actions: [
+          IconButton(onPressed: (){
+            addMyData();
+          }, icon: Icon(Icons.send))
+        ],),
+        body: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Image.file(userImage),
+            Text('이미지업로드화면'),
+            TextField(
+              onChanged: (text){
+                setUserContent(text);
+              },
+            ),
+            IconButton(
+                onPressed: (){
+                  Navigator.pop(context);
+                },
+                icon: Icon(Icons.close)
+            ),
+          ],
+        )
+    );
+
+  }
+}
